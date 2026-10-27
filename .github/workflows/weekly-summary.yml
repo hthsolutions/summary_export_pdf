@@ -6,8 +6,8 @@ on:
     # Noon in America/Chicago is 17:00 UTC during daylight time and 18:00 UTC
     # otherwise. The job continues only when Chicago local time is 12:00,
     # so a manual run always exports and the extra cron hour does not.
+    - cron: "0 16 * * *"
     - cron: "0 17 * * *"
-    - cron: "0 18 * * *"
 
 jobs:
   export:
