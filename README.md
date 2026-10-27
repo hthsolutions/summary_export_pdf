@@ -20,9 +20,12 @@ Credentials are the same ones the Summary app uses. Set `SUPABASE_URL` and `SUPA
 
 ## GitHub Actions
 
-`.github/workflows/weekly-summary.yml` runs the export when the send pdf Zap dispatches it, and when someone starts **Weekly summary** by hand. The job checks out this repo and `hthsolutions/revel-demo`, then uploads the Excel and PDF as the `weekly-summary` artifact (kept 90 days).
+`.github/workflows/weekly-summary.yml` runs the export when the send pdf Zap dispatches it, and when someone starts **Weekly summary** by hand. The job checks out this repo and `hthsolutions/revel-demo`, emails the PDF, and uploads the Excel and PDF as the `weekly-summary` artifact (kept 90 days).
 
-The workflow runs only after this repo is on GitHub. Add these repository secrets first. Use the Summary app key, not the anon key.
+The workflow runs only after this repo is on GitHub. Add these repository secrets first. Use the Summary app key, not the anon key. Mail is skipped until the three mail secrets are set. `MAIL_PASSWORD` is a Gmail app password for `MAIL_USERNAME`, not the normal Gmail password.
 
 - `SUPABASE_URL`
 - `SUPABASE_KEY`
+- `MAIL_USERNAME`
+- `MAIL_PASSWORD`
+- `MAIL_TO`

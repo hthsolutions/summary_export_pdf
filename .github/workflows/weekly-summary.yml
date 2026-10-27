@@ -34,6 +34,41 @@ jobs:
           REVEL_DEMO: ${{ github.workspace }}/revel-demo
         run: python export_weekly_summary.py
 
+      - name: Find the PDF
+        id: pdf
+        shell: pwsh
+        run: |
+          $pdf = Get-ChildItem -Path . -Filter "Weekly_Summary_*.pdf" | Select-Object -First 1
+          if (-not $pdf) { throw "No PDF was written." }
+          "path=$($pdf.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+
+      - name: Check mail settings
+        id: mail
+        shell: pwsh
+        env:
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          $ready = -not [string]::IsNullOrWhiteSpace($env:MAIL_TO) `
+            -and -not [string]::IsNullOrWhiteSpace($env:MAIL_USERNAME) `
+            -and -not [string]::IsNullOrWhiteSpace($env:MAIL_PASSWORD)
+          "send=$($ready.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+
+      - name: Email the PDF
+        if: steps.mail.outputs.send == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: Summary (Weekly)
+          to: ${{ secrets.MAIL_TO }}
+          from: Weekly Summary <${{ secrets.MAIL_USERNAME }}>
+          body: The weekly summary PDF is attached.
+          attachments: ${{ steps.pdf.outputs.path }}
+
       - name: Upload Excel and PDF
         uses: actions/upload-artifact@v4
         with:
