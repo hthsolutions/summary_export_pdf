@@ -69,12 +69,10 @@ jobs:
           body: The weekly summary PDF is attached.
           attachments: ${{ steps.pdf.outputs.path }}
 
-      - name: Upload Excel and PDF
+      - name: Upload PDF
         uses: actions/upload-artifact@v4
         with:
           name: weekly-summary
-          path: |
-            Weekly_Summary_*.xlsx
-            Weekly_Summary_*.pdf
+          path: Weekly_Summary_*.pdf
           if-no-files-found: error
           retention-days: 90
