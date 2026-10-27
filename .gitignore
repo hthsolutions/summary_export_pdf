@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Environments and secrets
+.env
+.venv/
+venv/
+env/
+.streamlit/secrets.toml
+
+# Editors
+.idea/
+.vscode/

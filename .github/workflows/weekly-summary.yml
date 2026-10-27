@@ -1,0 +1,65 @@
+name: Weekly summary
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Noon in America/Chicago is 17:00 UTC during daylight time and 18:00 UTC
+    # otherwise. The job continues only when Chicago local time is 12:00,
+    # so a manual run always exports and the extra cron hour does not.
+    - cron: "0 17 * * *"
+    - cron: "0 18 * * *"
+
+jobs:
+  export:
+    runs-on: windows-latest
+    steps:
+      - name: Run only at noon Central
+        id: clock
+        shell: pwsh
+        run: |
+          $manual = "${{ github.event_name }}" -eq "workflow_dispatch"
+          $tz = [System.TimeZoneInfo]::FindSystemTimeZoneById("Central Standard Time")
+          $local = [System.TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, $tz)
+          $run = $manual -or ($local.Hour -eq 12)
+          "run=$($run.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
+
+      - name: Checkout this repo
+        if: steps.clock.outputs.run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Checkout revel-demo
+        if: steps.clock.outputs.run == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: hthsolutions/revel-demo
+          ref: main
+          path: revel-demo
+
+      - name: Set up Python
+        if: steps.clock.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        if: steps.clock.outputs.run == 'true'
+        run: python -m pip install -r requirements.txt
+
+      - name: Export the current week
+        if: steps.clock.outputs.run == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          REVEL_DEMO: ${{ github.workspace }}/revel-demo
+        run: python export_weekly_summary.py
+
+      - name: Upload Excel and PDF
+        if: steps.clock.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-summary
+          path: |
+            Weekly_Summary_*.xlsx
+            Weekly_Summary_*.pdf
+          if-no-files-found: error
+          retention-days: 90

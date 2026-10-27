@@ -1,0 +1,5 @@
+pandas
+openpyxl
+reportlab
+streamlit>=1.36
+supabase>=2.0.0
