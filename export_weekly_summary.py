@@ -102,6 +102,8 @@ EXCEL_FORMATS = {
     "share": "0.0%",
     "num1": "0.0",
     "score": "0.00",
+    "delta2": "+0.00;-0.00;0.00",
+    "delta0": "+0;-0;0",
     "int": "0",
 }
 
@@ -132,6 +134,13 @@ SALES_COLUMNS = [
         "money0",
         16,
         "Net sales for the 7 days ending on the business date.",
+    ),
+    Column(
+        "week_net_sales_growth",
+        "Weekly Growth %",
+        "points",
+        16,
+        "Percent change in net sales versus the previous 7 days.",
     ),
     Column(
         "week_share",
@@ -206,7 +215,7 @@ SALES_COLUMNS = [
 ]
 
 REVIEW_COLUMNS = [
-    Column("rank", "Rank", "int", 8),
+    Column("rank", "#", "int", 8),
     Column("location", "Store", "text", 24),
     Column(
         "week_review_score",
@@ -216,11 +225,25 @@ REVIEW_COLUMNS = [
         "Average star rating of the reviews posted during those 7 days.",
     ),
     Column(
+        "week_review_score_change",
+        "Week avg (Change +/-)",
+        "delta2",
+        18,
+        "This week's average minus the average for the previous 7 days. Blank when either week has no scored reviews.",
+    ),
+    Column(
         "week_review_count",
-        "Week reviews",
+        "Week",
         "int",
-        14,
+        12,
         "Google reviews posted during those 7 days.",
+    ),
+    Column(
+        "week_review_count_change",
+        "Week (change +/-)",
+        "delta0",
+        16,
+        "This week's review count minus the count for the previous 7 days.",
     ),
     Column(
         "day_review_score",
@@ -231,9 +254,9 @@ REVIEW_COLUMNS = [
     ),
     Column(
         "day_review_count",
-        "Day reviews",
+        "Day",
         "int",
-        13,
+        10,
         "Google reviews posted on the business date.",
     ),
     Column(
@@ -503,6 +526,16 @@ def assemble_report(
     )
     comparison = api["combine_periods"](day_metrics, week_metrics)
     comparison = comparison.merge(
+        api["week_net_sales_growth"](
+            week_metrics,
+            sales_daily,
+            week_start,
+            week_end,
+        ),
+        on="row_key",
+        how="left",
+    )
+    comparison = comparison.merge(
         api["review_metrics"](
             review_df,
             stores,
@@ -540,6 +573,8 @@ def assemble_report(
     )
 
     sales_notes = [
+        "Week growth % compares these 7 days with the 7 days "
+        "before them. "
         "Hourly labor % is shift wages divided by net sales. "
         "SpLH is net sales divided by hourly labor hours, with "
         "salaried roles such as GM left out of the hours. "
@@ -568,6 +603,8 @@ def assemble_report(
     review_notes = [
         "Ranked by average score for these 7 days, highest first. "
         "A store with no reviews this week is listed at the bottom. "
+        "Week change columns are this week minus the previous "
+        "7 days. "
         "Day columns use the business date in the title. "
         "Current score is the average of every Google review "
         "stored for the store.",
@@ -635,6 +672,10 @@ def display_value(kind: str, value) -> str:
         return f"{number:.1f}"
     if kind == "score":
         return f"{number:.2f}"
+    if kind == "delta2":
+        return f"{number:+.2f}"
+    if kind == "delta0":
+        return f"{number:+.0f}"
     if kind == "int":
         return f"{number:.0f}"
     return str(value)
