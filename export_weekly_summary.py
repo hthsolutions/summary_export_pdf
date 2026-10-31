@@ -95,6 +95,14 @@ AMBER_INK = "7A4E00"
 LINE = "D0D5DD"
 WHITE = "FFFFFF"
 
+# Same cutoffs as the Summary page. At or under is green.
+HOURLY_LABOR_CUTOFF = 18.0
+LANE_GOAL_SECONDS = 4 * 60
+GOOD_FILL = "D7EAE0"
+GOOD_INK = "157347"
+BAD_FILL = "F3DCDA"
+BAD_INK = "B42318"
+
 EXCEL_FORMATS = {
     "money0": '"$"#,##0',
     "money2": '"$"#,##0.00',
@@ -140,7 +148,8 @@ SALES_COLUMNS = [
         "Weekly Growth %",
         "points",
         16,
-        "Percent change in net sales versus the previous 7 days.",
+        "Percent change in net sales versus the previous 7 days. "
+        "Green when zero or positive, red when negative.",
     ),
     Column(
         "week_share",
@@ -158,17 +167,19 @@ SALES_COLUMNS = [
     ),
     Column(
         "day_labor_percent",
-        "Labor % (day)",
+        "Hr Labor % (day)",
         "points",
-        13,
-        "Shift wages divided by that day's net sales.",
+        15,
+        "Hourly shift wages divided by that day's net sales. "
+        "Green at 18% or under, red above 18%.",
     ),
     Column(
         "week_labor_percent",
-        "Labor % (week)",
+        "Hr Labor % (week)",
         "points",
-        14,
-        "Shift wages divided by net sales for those 7 days.",
+        16,
+        "Hourly shift wages divided by net sales for those 7 days. "
+        "Green at 18% or under, red above 18%.",
     ),
     Column(
         "day_splh",
@@ -189,14 +200,16 @@ SALES_COLUMNS = [
         "Drive-thru (day)",
         "text",
         16,
-        "Car-weighted average lane time that day.",
+        "Car-weighted average lane time that day. "
+        "Green at 4:00 or under, red above 4:00.",
     ),
     Column(
         "week_lane",
         "Drive-thru (week)",
         "text",
         17,
-        "Car-weighted average lane time over those 7 days.",
+        "Car-weighted average lane time over those 7 days. "
+        "Green at 4:00 or under, red above 4:00.",
     ),
     Column(
         "day_ot_hours",
@@ -215,7 +228,6 @@ SALES_COLUMNS = [
 ]
 
 REVIEW_COLUMNS = [
-    Column("rank", "#", "int", 8),
     Column("location", "Store", "text", 24),
     Column(
         "week_review_score",
@@ -261,9 +273,9 @@ REVIEW_COLUMNS = [
     ),
     Column(
         "current_review_score",
-        "Current score",
+        "Current",
         "score",
-        15,
+        12,
         "Average star rating of every Google review stored for this store.",
     ),
 ]
@@ -573,12 +585,18 @@ def assemble_report(
     )
 
     sales_notes = [
-        "Week growth % compares these 7 days with the 7 days "
-        "before them. "
-        "Hourly labor % is shift wages divided by net sales. "
+        "Stores follow opening order: Marble Falls, Lampasas, "
+        "Leander, then Temple. "
+        "Weekly growth % compares these 7 days with the 7 days "
+        "before them. Zero or positive growth is green, and "
+        "negative growth is red. "
+        "Hr labor % is hourly shift wages divided by net sales. "
+        "18% or under is green, and above 18% is red. "
         "SpLH is net sales divided by hourly labor hours, with "
         "salaried roles such as GM left out of the hours. "
         "Drive-thru time is the car-weighted average lane time. "
+        "4:00 or under is green, and above 4:00 is red. "
+        "A blank cell stays uncolored. "
         "OT hours leave out the GM role. All stores adds the "
         "stores together, then divides.",
         "Annualized net sales is the net sales from these 7 days, "
@@ -601,13 +619,12 @@ def assemble_report(
         )
 
     review_notes = [
-        "Ranked by average score for these 7 days, highest first. "
-        "A store with no reviews this week is listed at the bottom. "
-        "Week change columns are this week minus the previous "
-        "7 days. "
-        "Day columns use the business date in the title. "
-        "Current score is the average of every Google review "
-        "stored for the store.",
+        "Stores follow opening order: Marble Falls, Lampasas, "
+        "Leander, then Temple. All stores pools every review "
+        "across stores. Week change columns are this week "
+        "minus the previous 7 days. Day columns use the "
+        "business date in the title. Current is the average "
+        "of every Google review stored for the store.",
     ]
 
     return Report(
@@ -688,7 +705,42 @@ def _fills():
         "total": PatternFill("solid", fgColor=TOTAL),
         "amber": PatternFill("solid", fgColor=AMBER),
         "white": PatternFill("solid", fgColor=WHITE),
+        "good": PatternFill("solid", fgColor=GOOD_FILL),
+        "bad": PatternFill("solid", fgColor=BAD_FILL),
     }
+
+
+def performance_tone(key: str, row) -> str | None:
+    """Good or bad, using the same rules as the Summary page.
+
+    Hourly labor is green at 18% or under. Weekly growth is
+    green at zero or above. Drive-thru time is green at 4:00
+    or under, judged on the rounded clock the table shows.
+    A blank cell stays uncolored.
+    """
+
+    if key in {"day_labor_percent", "week_labor_percent"}:
+        value = row[key]
+        if is_blank(value):
+            return None
+        return "good" if float(value) <= HOURLY_LABOR_CUTOFF else "bad"
+    if key == "week_net_sales_growth":
+        value = row[key]
+        if is_blank(value):
+            return None
+        return "good" if float(value) >= 0 else "bad"
+
+    seconds_key = {
+        "day_lane": "day_lane_seconds",
+        "week_lane": "week_lane_seconds",
+    }.get(key)
+    if seconds_key is None or seconds_key not in row.index:
+        return None
+    raw = row[seconds_key]
+    if is_blank(raw):
+        return None
+    shown = int(round(float(raw)))
+    return "good" if shown <= LANE_GOAL_SECONDS else "bad"
 
 
 def _border(color: str = LINE, style: str = "thin") -> Border:
@@ -733,8 +785,6 @@ def write_block(
 
     fills = _fills()
     header_font = Font(name="Calibri", bold=True, color=WHITE, size=9)
-    body_font = Font(name="Calibri", size=9, color=INK)
-    bold_font = Font(name="Calibri", bold=True, size=9, color=INK)
     header_alignment = Alignment(
         horizontal="center",
         vertical="center",
@@ -757,20 +807,35 @@ def write_block(
     for row_offset in range(len(frame)):
         row_number = start_row + 1 + row_offset
         is_total = emphasize_last and row_offset == last_index
+        record = frame.iloc[row_offset]
         ws.row_dimensions[row_number].height = 18
         for offset, column in enumerate(columns, start=1):
-            raw = frame.iloc[row_offset][column.key]
+            raw = record[column.key]
             cell = ws.cell(
                 row_number,
                 offset,
                 excel_value(column.kind, raw),
             )
-            cell.font = bold_font if is_total else body_font
+            tone = performance_tone(column.key, record)
+            if tone == "good":
+                ink = GOOD_INK
+                cell.fill = fills["good"]
+            elif tone == "bad":
+                ink = BAD_INK
+                cell.fill = fills["bad"]
+            else:
+                ink = INK
+                if is_total:
+                    cell.fill = fills["total"]
+                elif row_offset % 2 == 1:
+                    cell.fill = fills["zebra"]
+            cell.font = Font(
+                name="Calibri",
+                bold=is_total,
+                size=9,
+                color=ink,
+            )
             cell.border = grid
-            if is_total:
-                cell.fill = fills["total"]
-            elif row_offset % 2 == 1:
-                cell.fill = fills["zebra"]
             if column.kind == "text":
                 cell.alignment = Alignment(
                     horizontal="left",
@@ -1115,12 +1180,11 @@ def write_sheet(
     row += 1
 
     header_row = row
-    table = frame[[column.key for column in columns]]
     table_end = write_block(
         ws,
         header_row,
         columns,
-        table,
+        frame,
         emphasize_last,
     )
     last_table_row = max(header_row, table_end - 1)
@@ -1332,24 +1396,10 @@ def write_pdf(report: Report, path: Path) -> None:
         other = (usable - store_width) / max(len(columns) - 1, 1)
         widths = []
         for column in columns:
-            if column.key in {"location"}:
+            if column.key == "location":
                 widths.append(store_width)
-            elif column.key == "rank":
-                widths.append(0.48 * inch)
             else:
                 widths.append(other)
-        # Rank is narrow, so give the leftover back to the other columns.
-        if any(column.key == "rank" for column in columns):
-            spare = usable - sum(widths)
-            expandable = [
-                index
-                for index, column in enumerate(columns)
-                if column.key not in {"rank", "location"}
-            ]
-            if expandable and spare:
-                share = spare / len(expandable)
-                for index in expandable:
-                    widths[index] += share
 
         header = [
             Paragraph(escape(column.header), header_style)
@@ -1357,21 +1407,29 @@ def write_pdf(report: Report, path: Path) -> None:
         ]
         rows = [header]
         last_index = len(frame) - 1
+        tone_cells = []
         for row_offset in range(len(frame)):
             emphasize = emphasize_last and row_offset == last_index
             label_style = text_bold if emphasize else text_style
             value_style = number_bold if emphasize else number_style
+            record = frame.iloc[row_offset]
             row = []
-            for column in columns:
-                shown = display_value(
-                    column.kind,
-                    frame.iloc[row_offset][column.key],
-                )
-                style = label_style if column.kind == "text" else value_style
-                if column.kind == "text" or column.key == "rank":
-                    row.append(Paragraph(escape(shown), label_style if column.kind == "text" else value_style))
+            for col_offset, column in enumerate(columns):
+                shown = display_value(column.kind, record[column.key])
+                tone = performance_tone(column.key, record)
+                if tone == "good":
+                    shown = f'<font color="#{GOOD_INK}">{escape(shown)}</font>'
+                    tone_cells.append((row_offset + 1, col_offset, "good"))
+                elif tone == "bad":
+                    shown = f'<font color="#{BAD_INK}">{escape(shown)}</font>'
+                    tone_cells.append((row_offset + 1, col_offset, "bad"))
                 else:
-                    row.append(Paragraph(escape(shown), style))
+                    shown = escape(shown)
+                if column.kind == "text":
+                    style = label_style
+                else:
+                    style = value_style
+                row.append(Paragraph(shown, style))
             rows.append(row)
 
         table = Table(rows, colWidths=widths, repeatRows=1)
@@ -1398,6 +1456,16 @@ def write_pdf(report: Report, path: Path) -> None:
                 style_commands.append(
                     ("BACKGROUND", (0, excel_row), (-1, excel_row), colors.HexColor("#F7F8FA"))
                 )
+        for excel_row, col_offset, tone in tone_cells:
+            fill = GOOD_FILL if tone == "good" else BAD_FILL
+            style_commands.append(
+                (
+                    "BACKGROUND",
+                    (col_offset, excel_row),
+                    (col_offset, excel_row),
+                    colors.HexColor(f"#{fill}"),
+                )
+            )
         table.setStyle(TableStyle(style_commands))
         return table
 
